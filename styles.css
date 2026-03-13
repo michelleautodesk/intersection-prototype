@@ -1,0 +1,183 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background-color: #f5f5f5;
+    min-height: 100vh;
+}
+
+.app-container {
+    display: flex;
+    height: 100vh;
+}
+
+.canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #ffffff;
+    position: relative;
+}
+
+#intersection-canvas {
+    background-color: #f0f0f0;
+    cursor: default;
+    border-radius: 4px;
+}
+
+.control-panel {
+    width: 280px;
+    background-color: #ffffff;
+    border-left: 1px solid #e0e0e0;
+    padding: 20px;
+    overflow-y: auto;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
+}
+
+.control-panel h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.control-section {
+    margin-bottom: 24px;
+}
+
+.control-section h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+
+.control-group {
+    margin-bottom: 12px;
+}
+
+.control-group label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #e0e0e0;
+    outline: none;
+    -webkit-appearance: none;
+    margin: 8px 0;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #4a9eff;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.control-group input[type="range"]::-webkit-slider-thumb:hover {
+    background: #3a8eef;
+}
+
+.control-group input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #4a9eff;
+}
+
+.control-group span {
+    display: inline-block;
+    min-width: 30px;
+    text-align: right;
+    font-size: 13px;
+    color: #666;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+}
+
+.control-group button {
+    width: 100%;
+    padding: 10px 16px;
+    background-color: #4a9eff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.control-group button:hover {
+    background-color: #3a8eef;
+}
+
+.control-group button:active {
+    background-color: #2a7edf;
+}
+
+.instructions {
+    background-color: #f8f9fa;
+    padding: 16px;
+    border-radius: 8px;
+    margin-top: 20px;
+}
+
+.instructions h3 {
+    margin-bottom: 10px;
+}
+
+.instructions ul {
+    list-style: none;
+    padding: 0;
+}
+
+.instructions li {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+    padding-left: 12px;
+    position: relative;
+}
+
+.instructions li::before {
+    content: '•';
+    position: absolute;
+    left: 0;
+    color: #4a9eff;
+}
+
+.instructions li strong {
+    color: #333;
+}
+
+/* Tooltip for active point */
+.tooltip {
+    position: absolute;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 100;
+    white-space: nowrap;
+}

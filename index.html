@@ -507,6 +507,34 @@
         function calculateCornerHitAreaPath(corner) {
             const { left, right, top, bottom } = getCornerGeometry();
             const r = config.cornerRadii[corner];
+            const handleSize = 15; // Size of hit area when r=0
+            
+            // When radius is 0, create a small square hit area at the corner
+            if (r === 0) {
+                let cx, cy;
+                switch(corner) {
+                    case 'topLeft':
+                        cx = left; cy = top;
+                        break;
+                    case 'topRight':
+                        cx = right; cy = top;
+                        break;
+                    case 'bottomLeft':
+                        cx = left; cy = bottom;
+                        break;
+                    case 'bottomRight':
+                        cx = right; cy = bottom;
+                        break;
+                }
+                const half = handleSize / 2;
+                return `
+                    M ${cx - half} ${cy - half}
+                    L ${cx + half} ${cy - half}
+                    L ${cx + half} ${cy + half}
+                    L ${cx - half} ${cy + half}
+                    Z
+                `;
+            }
             
             switch(corner) {
                 case 'topLeft':
