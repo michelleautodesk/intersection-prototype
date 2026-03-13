@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intersection Design Tool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .canvas-container {
+            position: relative;
+            background: #f0f0f0;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #intersection-svg {
+            display: block;
+        }
+
+        /* Intersection center interactive states */
+        #intersection-center {
+            cursor: pointer;
+            transition: fill 0.15s ease;
+        }
+
+        #intersection-center:hover {
+            fill: rgba(220, 233, 240, 0.6);
+        }
+
+        #intersection-center.selected {
+            fill: rgba(200, 221, 233, 0.8);
+        }
+
+        #intersection-center.selected:hover {
+            fill: rgba(200, 221, 233, 0.8);
+        }
+
+        /* Corner curves (shown when corner is selected or hovered) */
+        .corner-curve {
+            fill: none;
+            stroke: #4a90d9;
+            stroke-width: 3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .corner-curve.hovered {
+            opacity: 0.6;
+        }
+
+        .corner-curve.visible {
+            opacity: 1;
+            pointer-events: stroke;
+            cursor: grab;
+        }
+
+        .corner-curve.visible:active {
+            cursor: grabbing;
+        }
+
+        /* Corner hit areas (invisible but clickable/draggable) */
+        .corner-hit-area {
+            fill: transparent;
+            cursor: grab;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .corner-hit-area.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .corner-hit-area:hover {
+            fill: rgba(74, 144, 217, 0.08);
+        }
+
+        .corner-hit-area:active {
+            cursor: grabbing;
+        }
+
+        /* Drag handles */
+        .drag-handle {
+            cursor: grab;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+        }
+
+        .drag-handle.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        /* Endpoint handles (circles at curve ends) */
+        .endpoint-handle {
+            fill: white;
+            stroke: #4a90d9;
+            stroke-width: 2;
+        }
+
+        .endpoint-handle:hover {
+            fill: #e8f2fc;
+        }
+
+        /* Midpoint handle (blue square) */
+        .mid-handle {
+            fill: #4a90d9;
+            stroke: #2d6cb5;
+            stroke-width: 1;
+        }
+
+        .mid-handle:hover {
+            fill: #5a9de9;
+        }
+
+        .mid-handle.hovered {
+            opacity: 0.8;
+        }
+
+        /* Connector line from curve to input */
+        .connector-line {
+            fill: none;
+            stroke: #999;
+            stroke-width: 1;
+            stroke-dasharray: 4, 3;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, stroke 0.15s ease;
+        }
+
+        .connector-line.dim {
+            opacity: 0.4;
+            stroke: #777;
+        }
+
+        .connector-line.hovered {
+            opacity: 0.8;
+            stroke: #777;
+        }
+
+        .connector-line.visible {
+            opacity: 1;
+            stroke: #777;
+        }
+
+        /* In-context radius input */
+        .radius-input-container {
+            position: absolute;
+            display: none;
+            align-items: center;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 4px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            font-size: 13px;
+            z-index: 100;
+        }
+
+        .radius-input-container.visible {
+            display: flex;
+        }
+
+        .radius-input-container.hovered {
+            display: flex;
+            opacity: 0.6;
+        }
+
+        .radius-input-container label {
+            color: #666;
+            margin-right: 4px;
+            font-weight: 500;
+        }
+
+        .radius-input-container input {
+            width: 40px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            padding: 2px 4px;
+            font-size: 13px;
+            text-align: right;
+            outline: none;
+        }
+
+        .radius-input-container input:focus {
+            border-color: #4a90d9;
+        }
+
+        .radius-input-container .unit {
+            color: #999;
+            margin-left: 2px;
+            font-size: 12px;
+        }
+
+        /* Dragging state */
+        body.dragging {
+            cursor: grabbing !important;
+            user-select: none;
+        }
+
+        body.dragging * {
+            cursor: grabbing !important;
+        }
+    </style>
+</head>
+<body>
+    <h1>Intersection Design Tool</h1>
+    
+    <div class="canvas-container">
+        <svg id="intersection-svg" width="700" height="700" viewBox="0 0 700 700">
+            <!-- Background -->
+            <rect width="700" height="700" fill="#f0f0f0" />
+            
+            <!-- Intersection shape with rounded corners -->
+            <g id="intersection-group">
+                <!-- Sidewalks (bottom layer - gets covered by road) -->
+                <g id="sidewalks" fill="#e8e8e8">
+                    <path id="sidewalk-top-left" />
+                    <path id="sidewalk-top-right" />
+                    <path id="sidewalk-bottom-left" />
+                    <path id="sidewalk-bottom-right" />
+                </g>
+                
+                <!-- Main road surface (covers sidewalks where it expands) -->
+                <path id="road-surface" fill="#d0d0d0" />
+                
+                <!-- Lane markings -->
+                <g id="lane-markings" stroke="white" stroke-width="2">
+                    <line id="v-center-top" />
+                    <line id="v-center-bottom" />
+                    <line id="h-center-left" />
+                    <line id="h-center-right" />
+                    
+                    <line id="v-lane1-top" stroke="#c8c8c8" />
+                    <line id="v-lane2-top" stroke="#c8c8c8" />
+                    <line id="v-lane1-bottom" stroke="#c8c8c8" />
+                    <line id="v-lane2-bottom" stroke="#c8c8c8" />
+                    <line id="h-lane1-left" stroke="#c8c8c8" />
+                    <line id="h-lane2-left" stroke="#c8c8c8" />
+                    <line id="h-lane1-right" stroke="#c8c8c8" />
+                    <line id="h-lane2-right" stroke="#c8c8c8" />
+                </g>
+                
+                <!-- Intersection center (interactive area) -->
+                <path id="intersection-center" fill="transparent" />
+                
+                <!-- Corner hit areas (clickable regions) -->
+                <g id="corner-hit-areas">
+                    <path id="hit-tl" class="corner-hit-area" data-corner="topLeft" />
+                    <path id="hit-tr" class="corner-hit-area" data-corner="topRight" />
+                    <path id="hit-bl" class="corner-hit-area" data-corner="bottomLeft" />
+                    <path id="hit-br" class="corner-hit-area" data-corner="bottomRight" />
+                </g>
+                
+                <!-- Connector lines (from handles to input) -->
+                <g id="connector-lines">
+                    <line id="connector-tl" class="connector-line" data-corner="topLeft" />
+                    <line id="connector-tr" class="connector-line" data-corner="topRight" />
+                    <line id="connector-bl" class="connector-line" data-corner="bottomLeft" />
+                    <line id="connector-br" class="connector-line" data-corner="bottomRight" />
+                </g>
+                
+                <!-- Corner curves (visual feedback when selected) -->
+                <g id="corner-curves">
+                    <path id="curve-tl" class="corner-curve" data-corner="topLeft" />
+                    <path id="curve-tr" class="corner-curve" data-corner="topRight" />
+                    <path id="curve-bl" class="corner-curve" data-corner="bottomLeft" />
+                    <path id="curve-br" class="corner-curve" data-corner="bottomRight" />
+                </g>
+                
+                <!-- Drag handles -->
+                <g id="drag-handles">
+                    <!-- Endpoint handles (circles) -->
+                    <circle id="handle-tl-1" class="drag-handle endpoint-handle" r="4" data-corner="topLeft" />
+                    <circle id="handle-tl-2" class="drag-handle endpoint-handle" r="4" data-corner="topLeft" />
+                    <circle id="handle-tr-1" class="drag-handle endpoint-handle" r="4" data-corner="topRight" />
+                    <circle id="handle-tr-2" class="drag-handle endpoint-handle" r="4" data-corner="topRight" />
+                    <circle id="handle-bl-1" class="drag-handle endpoint-handle" r="4" data-corner="bottomLeft" />
+                    <circle id="handle-bl-2" class="drag-handle endpoint-handle" r="4" data-corner="bottomLeft" />
+                    <circle id="handle-br-1" class="drag-handle endpoint-handle" r="4" data-corner="bottomRight" />
+                    <circle id="handle-br-2" class="drag-handle endpoint-handle" r="4" data-corner="bottomRight" />
+                    
+                    <!-- Midpoint handles (squares) -->
+                    <rect id="handle-tl-mid" class="drag-handle mid-handle" width="10" height="10" data-corner="topLeft" />
+                    <rect id="handle-tr-mid" class="drag-handle mid-handle" width="10" height="10" data-corner="topRight" />
+                    <rect id="handle-bl-mid" class="drag-handle mid-handle" width="10" height="10" data-corner="bottomLeft" />
+                    <rect id="handle-br-mid" class="drag-handle mid-handle" width="10" height="10" data-corner="bottomRight" />
+                </g>
+            </g>
+        </svg>
+        
+        <!-- In-context radius input -->
+        <div id="radius-input" class="radius-input-container">
+            <label>R</label>
+            <input type="number" id="radius-value-input" min="0" value="25" />
+            <span class="unit">m</span>
+        </div>
+    </div>
+
+    <script>
+        const config = {
+            canvasSize: 700,
+            roadWidth: 140,
+            laneWidth: 35,
+            sidewalkWidth: 24,
+            cornerRadii: {
+                topLeft: 25,
+                topRight: 25,
+                bottomLeft: 25,
+                bottomRight: 25
+            }
+        };
+
+        const svg = document.getElementById('intersection-svg');
+        const radiusInputContainer = document.getElementById('radius-input');
+        const radiusInput = document.getElementById('radius-value-input');
+
+        function getCornerAbbrev(corner) {
+            return corner.replace('top', 't').replace('bottom', 'b').replace('Left', 'l').replace('Right', 'r');
+        }
+
+        function getCornerGeometry() {
+            const size = config.canvasSize;
+            const roadW = config.roadWidth;
+            const center = size / 2;
+            const halfRoad = roadW / 2;
+            
+            return {
+                left: center - halfRoad,
+                right: center + halfRoad,
+                top: center - halfRoad,
+                bottom: center + halfRoad,
+                center
+            };
+        }
+
+        function calculateIntersectionPath() {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const size = config.canvasSize;
+            const rTL = config.cornerRadii.topLeft;
+            const rTR = config.cornerRadii.topRight;
+            const rBL = config.cornerRadii.bottomLeft;
+            const rBR = config.cornerRadii.bottomRight;
+            
+            return `
+                M ${left} 0
+                L ${left} ${top - rTL}
+                A ${rTL} ${rTL} 0 0 1 ${left - rTL} ${top}
+                L 0 ${top}
+                L 0 ${bottom}
+                L ${left - rBL} ${bottom}
+                A ${rBL} ${rBL} 0 0 1 ${left} ${bottom + rBL}
+                L ${left} ${size}
+                L ${right} ${size}
+                L ${right} ${bottom + rBR}
+                A ${rBR} ${rBR} 0 0 1 ${right + rBR} ${bottom}
+                L ${size} ${bottom}
+                L ${size} ${top}
+                L ${right + rTR} ${top}
+                A ${rTR} ${rTR} 0 0 1 ${right} ${top - rTR}
+                L ${right} 0
+                Z
+            `;
+        }
+
+        function calculateSidewalkPaths() {
+            const { left: roadLeft, right: roadRight, top: roadTop, bottom: roadBottom } = getCornerGeometry();
+            const size = config.canvasSize;
+            const sw = config.sidewalkWidth;
+            
+            // Simple L-shaped sidewalks (no curve - road will cover where it expands)
+            return {
+                topLeft: `
+                    M ${roadLeft - sw} 0
+                    L ${roadLeft - sw} ${roadTop - sw}
+                    L 0 ${roadTop - sw}
+                    L 0 ${roadTop}
+                    L ${roadLeft} ${roadTop}
+                    L ${roadLeft} 0
+                    Z
+                `,
+                topRight: `
+                    M ${roadRight} 0
+                    L ${roadRight} ${roadTop}
+                    L ${size} ${roadTop}
+                    L ${size} ${roadTop - sw}
+                    L ${roadRight + sw} ${roadTop - sw}
+                    L ${roadRight + sw} 0
+                    Z
+                `,
+                bottomLeft: `
+                    M 0 ${roadBottom}
+                    L ${roadLeft} ${roadBottom}
+                    L ${roadLeft} ${size}
+                    L ${roadLeft - sw} ${size}
+                    L ${roadLeft - sw} ${roadBottom + sw}
+                    L 0 ${roadBottom + sw}
+                    Z
+                `,
+                bottomRight: `
+                    M ${roadRight} ${size}
+                    L ${roadRight} ${roadBottom}
+                    L ${size} ${roadBottom}
+                    L ${size} ${roadBottom + sw}
+                    L ${roadRight + sw} ${roadBottom + sw}
+                    L ${roadRight + sw} ${size}
+                    Z
+                `
+            };
+        }
+
+        function calculateIntersectionCenterPath() {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const rTL = config.cornerRadii.topLeft;
+            const rTR = config.cornerRadii.topRight;
+            const rBL = config.cornerRadii.bottomLeft;
+            const rBR = config.cornerRadii.bottomRight;
+            
+            return `
+                M ${left} ${top - rTL}
+                A ${rTL} ${rTL} 0 0 1 ${left - rTL} ${top}
+                L ${left - rBL} ${bottom}
+                A ${rBL} ${rBL} 0 0 1 ${left} ${bottom + rBL}
+                L ${right} ${bottom + rBR}
+                A ${rBR} ${rBR} 0 0 1 ${right + rBR} ${bottom}
+                L ${right + rTR} ${top}
+                A ${rTR} ${rTR} 0 0 1 ${right} ${top - rTR}
+                Z
+            `;
+        }
+
+        function calculateCornerCurvePath(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const r = config.cornerRadii[corner];
+            
+            switch(corner) {
+                case 'topLeft':
+                    return `M ${left} ${top - r} A ${r} ${r} 0 0 1 ${left - r} ${top}`;
+                case 'topRight':
+                    return `M ${right + r} ${top} A ${r} ${r} 0 0 1 ${right} ${top - r}`;
+                case 'bottomLeft':
+                    return `M ${left - r} ${bottom} A ${r} ${r} 0 0 1 ${left} ${bottom + r}`;
+                case 'bottomRight':
+                    return `M ${right} ${bottom + r} A ${r} ${r} 0 0 1 ${right + r} ${bottom}`;
+            }
+        }
+
+        function getCornerEndpoints(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const r = config.cornerRadii[corner];
+            
+            switch(corner) {
+                case 'topLeft':
+                    return { p1: { x: left, y: top - r }, p2: { x: left - r, y: top } };
+                case 'topRight':
+                    return { p1: { x: right + r, y: top }, p2: { x: right, y: top - r } };
+                case 'bottomLeft':
+                    return { p1: { x: left - r, y: bottom }, p2: { x: left, y: bottom + r } };
+                case 'bottomRight':
+                    return { p1: { x: right, y: bottom + r }, p2: { x: right + r, y: bottom } };
+            }
+        }
+
+        function getCornerCenter(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            
+            switch(corner) {
+                case 'topLeft':
+                    return { x: left, y: top };
+                case 'topRight':
+                    return { x: right, y: top };
+                case 'bottomLeft':
+                    return { x: left, y: bottom };
+                case 'bottomRight':
+                    return { x: right, y: bottom };
+            }
+        }
+
+        function calculateCornerHitAreaPath(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const r = config.cornerRadii[corner];
+            
+            switch(corner) {
+                case 'topLeft':
+                    // Arc center at (left - r, top - r), curve from (left, top - r) to (left - r, top)
+                    return `
+                        M ${left - r} ${top - r}
+                        L ${left} ${top - r}
+                        A ${r} ${r} 0 0 1 ${left - r} ${top}
+                        Z
+                    `;
+                case 'topRight':
+                    // Arc center at (right + r, top - r), curve from (right + r, top) to (right, top - r)
+                    return `
+                        M ${right + r} ${top - r}
+                        L ${right + r} ${top}
+                        A ${r} ${r} 0 0 1 ${right} ${top - r}
+                        Z
+                    `;
+                case 'bottomLeft':
+                    // Arc center at (left - r, bottom + r), curve from (left - r, bottom) to (left, bottom + r)
+                    return `
+                        M ${left - r} ${bottom + r}
+                        L ${left - r} ${bottom}
+                        A ${r} ${r} 0 0 1 ${left} ${bottom + r}
+                        Z
+                    `;
+                case 'bottomRight':
+                    // Arc center at (right + r, bottom + r), curve from (right, bottom + r) to (right + r, bottom)
+                    return `
+                        M ${right + r} ${bottom + r}
+                        L ${right} ${bottom + r}
+                        A ${r} ${r} 0 0 1 ${right + r} ${bottom}
+                        Z
+                    `;
+            }
+        }
+
+        function getArcCenter(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const r = config.cornerRadii[corner];
+            
+            switch(corner) {
+                case 'topLeft':
+                    return { x: left - r, y: top - r };
+                case 'topRight':
+                    return { x: right + r, y: top - r };
+                case 'bottomLeft':
+                    return { x: left - r, y: bottom + r };
+                case 'bottomRight':
+                    return { x: right + r, y: bottom + r };
+            }
+        }
+
+        function getCurveMidpoint(corner) {
+            const { left, right, top, bottom } = getCornerGeometry();
+            const r = config.cornerRadii[corner];
+            const arcCenter = getArcCenter(corner);
+            
+            // For circular arc, midpoint is at 45 degrees from arc center
+            const offset = r * Math.SQRT1_2; // r * cos(45°) = r * sin(45°)
+            
+            switch(corner) {
+                case 'topLeft':
+                    // Arc from 0° to 90°, midpoint at 45°
+                    return { x: arcCenter.x + offset, y: arcCenter.y + offset };
+                case 'topRight':
+                    // Arc from 90° to 180°, midpoint at 135°
+                    return { x: arcCenter.x - offset, y: arcCenter.y + offset };
+                case 'bottomLeft':
+                    // Arc from 270° to 360°, midpoint at 315°
+                    return { x: arcCenter.x + offset, y: arcCenter.y - offset };
+                case 'bottomRight':
+                    // Arc from 180° to 270°, midpoint at 225°
+                    return { x: arcCenter.x - offset, y: arcCenter.y - offset };
+            }
+        }
+
+        function getRadiusLineEndpoint(corner) {
+            return getCurveMidpoint(corner);
+        }
+
+        function getInputPosition(corner) {
+            const arcCenter = getArcCenter(corner);
+            const offset = 10;
+            
+            switch(corner) {
+                case 'topLeft':
+                    return { x: arcCenter.x - 70 - offset, y: arcCenter.y - 12 };
+                case 'topRight':
+                    return { x: arcCenter.x + offset, y: arcCenter.y - 12 };
+                case 'bottomLeft':
+                    return { x: arcCenter.x - 70 - offset, y: arcCenter.y - 12 };
+                case 'bottomRight':
+                    return { x: arcCenter.x + offset, y: arcCenter.y - 12 };
+            }
+        }
+
+        function updateLaneMarkings() {
+            const { left: roadLeft, right: roadRight, top: roadTop, bottom: roadBottom, center } = getCornerGeometry();
+            const size = config.canvasSize;
+            const laneW = config.laneWidth;
+            
+            document.getElementById('v-center-top').setAttribute('x1', center);
+            document.getElementById('v-center-top').setAttribute('y1', 0);
+            document.getElementById('v-center-top').setAttribute('x2', center);
+            document.getElementById('v-center-top').setAttribute('y2', roadTop);
+            
+            document.getElementById('v-center-bottom').setAttribute('x1', center);
+            document.getElementById('v-center-bottom').setAttribute('y1', roadBottom);
+            document.getElementById('v-center-bottom').setAttribute('x2', center);
+            document.getElementById('v-center-bottom').setAttribute('y2', size);
+            
+            document.getElementById('h-center-left').setAttribute('x1', 0);
+            document.getElementById('h-center-left').setAttribute('y1', center);
+            document.getElementById('h-center-left').setAttribute('x2', roadLeft);
+            document.getElementById('h-center-left').setAttribute('y2', center);
+            
+            document.getElementById('h-center-right').setAttribute('x1', roadRight);
+            document.getElementById('h-center-right').setAttribute('y1', center);
+            document.getElementById('h-center-right').setAttribute('x2', size);
+            document.getElementById('h-center-right').setAttribute('y2', center);
+            
+            document.getElementById('v-lane1-top').setAttribute('x1', center - laneW);
+            document.getElementById('v-lane1-top').setAttribute('y1', 0);
+            document.getElementById('v-lane1-top').setAttribute('x2', center - laneW);
+            document.getElementById('v-lane1-top').setAttribute('y2', roadTop);
+            
+            document.getElementById('v-lane2-top').setAttribute('x1', center + laneW);
+            document.getElementById('v-lane2-top').setAttribute('y1', 0);
+            document.getElementById('v-lane2-top').setAttribute('x2', center + laneW);
+            document.getElementById('v-lane2-top').setAttribute('y2', roadTop);
+            
+            document.getElementById('v-lane1-bottom').setAttribute('x1', center - laneW);
+            document.getElementById('v-lane1-bottom').setAttribute('y1', roadBottom);
+            document.getElementById('v-lane1-bottom').setAttribute('x2', center - laneW);
+            document.getElementById('v-lane1-bottom').setAttribute('y2', size);
+            
+            document.getElementById('v-lane2-bottom').setAttribute('x1', center + laneW);
+            document.getElementById('v-lane2-bottom').setAttribute('y1', roadBottom);
+            document.getElementById('v-lane2-bottom').setAttribute('x2', center + laneW);
+            document.getElementById('v-lane2-bottom').setAttribute('y2', size);
+            
+            document.getElementById('h-lane1-left').setAttribute('x1', 0);
+            document.getElementById('h-lane1-left').setAttribute('y1', center - laneW);
+            document.getElementById('h-lane1-left').setAttribute('x2', roadLeft);
+            document.getElementById('h-lane1-left').setAttribute('y2', center - laneW);
+            
+            document.getElementById('h-lane2-left').setAttribute('x1', 0);
+            document.getElementById('h-lane2-left').setAttribute('y1', center + laneW);
+            document.getElementById('h-lane2-left').setAttribute('x2', roadLeft);
+            document.getElementById('h-lane2-left').setAttribute('y2', center + laneW);
+            
+            document.getElementById('h-lane1-right').setAttribute('x1', roadRight);
+            document.getElementById('h-lane1-right').setAttribute('y1', center - laneW);
+            document.getElementById('h-lane1-right').setAttribute('x2', size);
+            document.getElementById('h-lane1-right').setAttribute('y2', center - laneW);
+            
+            document.getElementById('h-lane2-right').setAttribute('x1', roadRight);
+            document.getElementById('h-lane2-right').setAttribute('y1', center + laneW);
+            document.getElementById('h-lane2-right').setAttribute('x2', size);
+            document.getElementById('h-lane2-right').setAttribute('y2', center + laneW);
+        }
+
+        function render() {
+            document.getElementById('road-surface').setAttribute('d', calculateIntersectionPath());
+            
+            const sidewalks = calculateSidewalkPaths();
+            document.getElementById('sidewalk-top-left').setAttribute('d', sidewalks.topLeft);
+            document.getElementById('sidewalk-top-right').setAttribute('d', sidewalks.topRight);
+            document.getElementById('sidewalk-bottom-left').setAttribute('d', sidewalks.bottomLeft);
+            document.getElementById('sidewalk-bottom-right').setAttribute('d', sidewalks.bottomRight);
+            
+            document.getElementById('intersection-center').setAttribute('d', calculateIntersectionCenterPath());
+            
+            ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'].forEach(corner => {
+                const abbrev = getCornerAbbrev(corner);
+                
+                // Update curve
+                document.getElementById('curve-' + abbrev).setAttribute('d', calculateCornerCurvePath(corner));
+                
+                // Update hit area
+                document.getElementById('hit-' + abbrev).setAttribute('d', calculateCornerHitAreaPath(corner));
+                
+                // Update connector line (shows radius length from arc center to curve)
+                const arcCenter = getArcCenter(corner);
+                const radiusEnd = getRadiusLineEndpoint(corner);
+                
+                // Update endpoint handles
+                const endpoints = getCornerEndpoints(corner);
+                document.getElementById('handle-' + abbrev + '-1').setAttribute('cx', endpoints.p1.x);
+                document.getElementById('handle-' + abbrev + '-1').setAttribute('cy', endpoints.p1.y);
+                document.getElementById('handle-' + abbrev + '-2').setAttribute('cx', endpoints.p2.x);
+                document.getElementById('handle-' + abbrev + '-2').setAttribute('cy', endpoints.p2.y);
+                
+                // Update midpoint square handle (rotated 45 degrees to align with curve)
+                const midHandle = document.getElementById('handle-' + abbrev + '-mid');
+                const handleSize = 10;
+                midHandle.setAttribute('x', radiusEnd.x - handleSize / 2);
+                midHandle.setAttribute('y', radiusEnd.y - handleSize / 2);
+                
+                // Rotate based on corner position
+                let rotation;
+                switch(corner) {
+                    case 'topLeft': rotation = 45; break;
+                    case 'topRight': rotation = -45; break;
+                    case 'bottomLeft': rotation = -45; break;
+                    case 'bottomRight': rotation = 45; break;
+                }
+                midHandle.setAttribute('transform', `rotate(${rotation}, ${radiusEnd.x}, ${radiusEnd.y})`);
+                
+                const connector = document.getElementById('connector-' + abbrev);
+                connector.setAttribute('x1', arcCenter.x);
+                connector.setAttribute('y1', arcCenter.y);
+                connector.setAttribute('x2', radiusEnd.x);
+                connector.setAttribute('y2', radiusEnd.y);
+            });
+            
+            updateLaneMarkings();
+            
+            if (selectedCorner) {
+                positionRadiusInput(selectedCorner);
+                radiusInput.value = config.cornerRadii[selectedCorner];
+            }
+        }
+
+        // State
+        let isIntersectionSelected = false;
+        let selectedCorner = null;
+        let isDragging = false;
+        let dragStartPos = null;
+        let dragStartRadius = null;
+        
+        const intersectionCenter = document.getElementById('intersection-center');
+        const cornerHitAreas = document.querySelectorAll('.corner-hit-area');
+        const cornerCurves = document.querySelectorAll('.corner-curve');
+        const dragHandles = document.querySelectorAll('.drag-handle');
+        const connectorLines = document.querySelectorAll('.connector-line');
+
+        function showCornerHitAreas(show) {
+            cornerHitAreas.forEach(area => {
+                area.classList.toggle('visible', show);
+            });
+        }
+
+        function showAllConnectorsDim(show) {
+            connectorLines.forEach(line => {
+                line.classList.toggle('dim', show);
+                if (!show) {
+                    line.classList.remove('visible');
+                }
+            });
+        }
+
+        function positionRadiusInput(corner) {
+            const pos = getInputPosition(corner);
+            radiusInputContainer.style.left = pos.x + 'px';
+            radiusInputContainer.style.top = pos.y + 'px';
+        }
+
+        function showCornerControls(corner, show) {
+            const abbrev = getCornerAbbrev(corner);
+            
+            document.getElementById('curve-' + abbrev).classList.toggle('visible', show);
+            document.getElementById('handle-' + abbrev + '-1').classList.toggle('visible', show);
+            document.getElementById('handle-' + abbrev + '-2').classList.toggle('visible', show);
+            document.getElementById('handle-' + abbrev + '-mid').classList.toggle('visible', show);
+            
+            const connector = document.getElementById('connector-' + abbrev);
+            if (show) {
+                connector.classList.remove('dim');
+                connector.classList.add('visible');
+            } else {
+                connector.classList.remove('visible');
+                if (isIntersectionSelected) {
+                    connector.classList.add('dim');
+                }
+            }
+        }
+
+        function selectCorner(corner) {
+            // Clear previous selection and hover states
+            ['topLeft', 'topRight', 'bottomLeft', 'bottomRight'].forEach(c => {
+                showCornerControls(c, false);
+                const abbrev = getCornerAbbrev(c);
+                document.getElementById('curve-' + abbrev).classList.remove('hovered');
+                const midHandle = document.getElementById('handle-' + abbrev + '-mid');
+                midHandle.classList.remove('hovered');
+                midHandle.style.opacity = '';
+            });
+            
+            if (corner) {
+                selectedCorner = corner;
+                showCornerControls(corner, true);
+                
+                radiusInput.value = config.cornerRadii[corner];
+                positionRadiusInput(corner);
+                radiusInputContainer.classList.remove('hovered');
+                radiusInputContainer.classList.add('visible');
+            } else {
+                selectedCorner = null;
+                radiusInputContainer.classList.remove('visible');
+                radiusInputContainer.classList.remove('hovered');
+                // Restore all connectors to dim state when no corner is selected
+                if (isIntersectionSelected) {
+                    showAllConnectorsDim(true);
+                }
+            }
+        }
+
+        function getSVGPoint(e) {
+            const rect = svg.getBoundingClientRect();
+            return {
+                x: (e.clientX - rect.left) * (700 / rect.width),
+                y: (e.clientY - rect.top) * (700 / rect.height)
+            };
+        }
+
+        function calculateRadiusFromDrag(corner, mousePos) {
+            const center = getCornerCenter(corner);
+            const dx = mousePos.x - center.x;
+            const dy = mousePos.y - center.y;
+            
+            let distance;
+            switch(corner) {
+                case 'topLeft':
+                    distance = Math.max(-dx, -dy);
+                    break;
+                case 'topRight':
+                    distance = Math.max(dx, -dy);
+                    break;
+                case 'bottomLeft':
+                    distance = Math.max(-dx, dy);
+                    break;
+                case 'bottomRight':
+                    distance = Math.max(dx, dy);
+                    break;
+            }
+            
+            return Math.max(0, Math.round(distance));
+        }
+
+        function startDrag(corner, e) {
+            isDragging = true;
+            dragStartPos = getSVGPoint(e);
+            dragStartRadius = config.cornerRadii[corner];
+            document.body.classList.add('dragging');
+            
+            if (selectedCorner !== corner) {
+                selectCorner(corner);
+            }
+        }
+
+        function onDrag(e) {
+            if (!isDragging || !selectedCorner) return;
+            
+            const mousePos = getSVGPoint(e);
+            
+            // Calculate drag delta from start position
+            const dx = mousePos.x - dragStartPos.x;
+            const dy = mousePos.y - dragStartPos.y;
+            
+            // Determine radius change based on drag direction (outward = increase, inward = decrease)
+            let delta;
+            switch(selectedCorner) {
+                case 'topLeft':
+                    delta = Math.max(-dx, -dy); // drag up-left increases
+                    break;
+                case 'topRight':
+                    delta = Math.max(dx, -dy); // drag up-right increases
+                    break;
+                case 'bottomLeft':
+                    delta = Math.max(-dx, dy); // drag down-left increases
+                    break;
+                case 'bottomRight':
+                    delta = Math.max(dx, dy); // drag down-right increases
+                    break;
+            }
+            
+            const newRadius = Math.max(0, Math.round(dragStartRadius + delta));
+            config.cornerRadii[selectedCorner] = newRadius;
+            render();
+        }
+
+        function endDrag() {
+            if (isDragging) {
+                isDragging = false;
+                dragStartPos = null;
+                dragStartRadius = null;
+                document.body.classList.remove('dragging');
+                
+                // Return to intersection selected state (deselect corner)
+                selectCorner(null);
+            }
+        }
+
+        // Event listeners
+        radiusInput.addEventListener('input', (e) => {
+            if (selectedCorner) {
+                let value = parseInt(e.target.value) || 0;
+                value = Math.max(0, value);
+                config.cornerRadii[selectedCorner] = value;
+                render();
+            }
+        });
+
+        radiusInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                radiusInput.blur();
+            }
+            if (e.key === 'Escape') {
+                selectCorner(null);
+            }
+        });
+
+        intersectionCenter.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            if (!isIntersectionSelected) {
+                // First click: select intersection area
+                isIntersectionSelected = true;
+                intersectionCenter.classList.add('selected');
+                showCornerHitAreas(true);
+                showAllConnectorsDim(true);
+            } else if (selectedCorner) {
+                // Already selected intersection and a corner is selected: 
+                // deselect corner, stay in intersection selected state
+                selectCorner(null);
+            }
+        });
+
+        cornerHitAreas.forEach(area => {
+            // Click to select (without dragging)
+            area.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const corner = area.dataset.corner;
+                selectCorner(corner);
+            });
+            
+            // Mousedown to start dragging immediately from hover
+            area.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const corner = area.dataset.corner;
+                startDrag(corner, e);
+            });
+            
+            // Hover to show curve, midpoint handle, connector line, and radius input preview
+            area.addEventListener('mouseenter', () => {
+                const corner = area.dataset.corner;
+                if (selectedCorner !== corner) {
+                    const abbrev = getCornerAbbrev(corner);
+                    document.getElementById('curve-' + abbrev).classList.add('hovered');
+                    document.getElementById('connector-' + abbrev).classList.add('hovered');
+                    const midHandle = document.getElementById('handle-' + abbrev + '-mid');
+                    midHandle.classList.add('hovered');
+                    midHandle.style.opacity = '0.8';
+                    midHandle.style.pointerEvents = 'none';
+                    
+                    // Show radius input preview
+                    positionRadiusInput(corner);
+                    radiusInput.value = config.cornerRadii[corner];
+                    radiusInputContainer.classList.add('hovered');
+                }
+            });
+            
+            area.addEventListener('mouseleave', () => {
+                const corner = area.dataset.corner;
+                const abbrev = getCornerAbbrev(corner);
+                document.getElementById('curve-' + abbrev).classList.remove('hovered');
+                document.getElementById('connector-' + abbrev).classList.remove('hovered');
+                const midHandle = document.getElementById('handle-' + abbrev + '-mid');
+                midHandle.classList.remove('hovered');
+                if (!midHandle.classList.contains('visible')) {
+                    midHandle.style.opacity = '';
+                }
+                
+                // Hide radius input preview (unless corner is selected)
+                if (selectedCorner !== corner) {
+                    radiusInputContainer.classList.remove('hovered');
+                }
+            });
+        });
+
+        // Drag on curves
+        cornerCurves.forEach(curve => {
+            curve.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const corner = curve.dataset.corner;
+                startDrag(corner, e);
+            });
+        });
+
+        // Drag on handles
+        dragHandles.forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const corner = handle.dataset.corner;
+                startDrag(corner, e);
+            });
+        });
+
+        // Global mouse events for dragging
+        document.addEventListener('mousemove', onDrag);
+        document.addEventListener('mouseup', endDrag);
+
+        // Click outside to deselect
+        svg.addEventListener('click', (e) => {
+            if (e.target === svg || e.target.tagName === 'rect') {
+                if (isIntersectionSelected) {
+                    isIntersectionSelected = false;
+                    intersectionCenter.classList.remove('selected');
+                    showCornerHitAreas(false);
+                    showAllConnectorsDim(false);
+                    selectCorner(null);
+                }
+            }
+        });
+
+        radiusInputContainer.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
+        radiusInputContainer.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
